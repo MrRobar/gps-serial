@@ -8,3 +8,7 @@ edition = "2021"
 [dependencies]
 serialport = "*"
 nmea-parser = "0.10.0"
+tzf-rs = "0.3.0"
+icu_timezone = "1.1.0"
+dtg = "5.0.0"
+chrono-tz = "0.8.1"
