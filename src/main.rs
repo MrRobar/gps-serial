@@ -3,29 +3,86 @@ use std::str::FromStr;
 use std::time::Duration;
 use icu_timezone::{CustomTimeZone, MetazoneCalculator, MetazoneId, TimeZoneBcp47Id};
 use nmea_parser::{NmeaParser, ParsedMessage};
+use serialport::{SerialPort, SerialPortInfo};
 use tzf_rs::{DefaultFinder, deg2num};
 
+struct Parser{
+    byte_counter: i32,
+    serial_buf: [u8; 1024],
+    parser: NmeaParser,
+    finder: DefaultFinder,
+    connected: bool,
+    buffer_ordinary: [u8; 512]
+
+}
+
+impl Parser {
+    fn form_sentence(&mut self, t: usize){
+        let slice = &self.serial_buf[..t];
+        for value in slice.iter(){
+            let symbol = char::from(*value);
+            println!("{}", symbol);
+
+            if *value == b'\r'{continue;}
+            if *value == b'\n' {
+
+                let last_minus_one = char::from(*value-1);
+                println!("Found end symbol after {last_minus_one}");
+
+                let line = String::from_utf8_lossy(&self.buffer_ordinary[0..self.byte_counter as usize]);
+                println!("Formed line: {line}");
+
+                self.byte_counter = 0;
+
+                if let Ok(my_sentence) = self.parser.parse_sentence(line.as_ref()){
+                    println!("myLine was parsed successfully");
+                }
+
+                // if let Ok(sentence) = parser.parse_sentence(line.as_ref()) {
+                //     println!("{:?}", sentence);
+                //     match sentence {
+                //         ParsedMessage::Gll(gll) => {
+                //             println!("Navigation: {:?}", gll);
+                //         }
+                //         ParsedMessage::Rmc(rmc) => {
+                //             if let Some(lon) = rmc.longitude {
+                //                 if let Some(lat) = rmc.latitude {
+                //                     println!("RMC pos: {} {}", lon, lat);
+                //                 }
+                //             }
+                //             let timezone = finder.get_tz_name(rmc.longitude.unwrap(), rmc.latitude.unwrap());
+                //             println!("Time:    {}", timezone);
+                //             if let Some(timestamp) = rmc.timestamp {
+                //             }
+                //         },
+                //         _ => {}
+                //     }
+                // }
+                return;
+            }
+            self.buffer_ordinary[self.byte_counter as usize] = *value;
+            self.byte_counter += 1;
+        }
+    }
+}
+
 fn main() {
+    let mut parser_struct = Parser{
+        byte_counter: 0,
+        serial_buf: [0u8; 1024],
+        parser: NmeaParser::new(),
+        finder: DefaultFinder::new(),
+        connected: false,
+        buffer_ordinary: [0u8; 512],
+    };
+
     let ports = serialport::available_ports().expect("System error");
     let port = ports.first().expect("No ports available");
     println!("Receiving data on {} at {} baud:", &port.port_name, 9600);
-
-    let mut port = serialport::new(&port.port_name, 9600)
-        .timeout(Duration::from_millis(10))
+    let mut port= serialport::new(&port.port_name, 9600)
+    .timeout(Duration::from_millis(10))
         .open()
         .expect(&format!("Unable to open serial port '{}'", port.port_name));
-
-    //let mut buffer = Vec::new();
-    let mut last = 0;
-    let mut serial_buf = [0u8; 1024];
-
-    let mut parser = NmeaParser::new();
-
-    let finder = DefaultFinder::new();
-
-    let mut connected = false;
-
-    let mut bufferOrdinary = [0u8; 512];
 
     let mut h = 0;
     let mut m = 0;
@@ -49,49 +106,10 @@ fn main() {
     //https://github.com/stm32-rs/stm32f4xx-hal/blob/master/examples/rtic-usart-shell.rs
 
     loop {
-        let mut  i = 0;
-        match port.read(serial_buf.as_mut_slice()) {
+        parser_struct.byte_counter = 0;
+        match port.read(parser_struct.serial_buf.as_mut_slice()) {
             Ok(t) => {
-
-                let slice = &serial_buf[..t];
-                let lenOrdinary = bufferOrdinary.len();
-                for value in slice.iter(){
-                    let symbol = char::from(*value);
-                    println!("{}", symbol);
-                    if *value == b'\r'{continue;}
-                    if *value == b'\n' {
-                        let line = String::from_utf8_lossy(&bufferOrdinary[0..i]);
-                        println!("Forming line from {i} symbols");
-                        println!("Formed line: {line}");
-                        i = 0;
-                        if let Ok(my_sentence) = parser.parse_sentence(line.as_ref()){
-                            println!("myLine was parsed successfully");
-                        }
-                        if let Ok(sentence) = parser.parse_sentence(line.as_ref()) {
-                            println!("{:?}", sentence);
-                            match sentence {
-                                ParsedMessage::Gll(gll) => {
-                                    println!("Navigation: {:?}", gll);
-                                }
-                                ParsedMessage::Rmc(rmc) => {
-                                    if let Some(lon) = rmc.longitude {
-                                        if let Some(lat) = rmc.latitude {
-                                            println!("RMC pos: {} {}", lon, lat);
-                                        }
-                                    }
-                                    // let timezone = finder.get_tz_name(rmc.longitude.unwrap(), rmc.latitude.unwrap());
-                                    // println!("Time:    {}", timezone);
-                                    /*if let Some(timestamp) = rmc.timestamp {
-                                    }*/
-                                },
-                                _ => {}
-                            }
-                        }
-                        return;
-                    }
-                    bufferOrdinary[i] = *value;
-                    i += 1;
-                }
+                parser_struct.form_sentence(t);
                 // std::io::stdout().write_all(&serial_buf[..t]).unwrap()
             },
 
@@ -102,3 +120,4 @@ fn main() {
         }
     }
 }
+
