@@ -12,8 +12,8 @@ struct Parser{
     parser: NmeaParser,
     finder: DefaultFinder,
     connected: bool,
+    can_iterate: bool,
     buffer_ordinary: [u8; 512]
-
 }
 
 impl Parser {
@@ -21,13 +21,14 @@ impl Parser {
         let slice = &self.serial_buf[..t];
         for value in slice.iter(){
             let symbol = char::from(*value);
-            println!("{}", symbol);
+            //println!("{}", symbol);
 
-            if *value == b'\r'{continue;}
+            if *value == b'\r'
+            {
+                //println!("Found r symbol, continuing execution");
+                continue;
+            }
             if *value == b'\n' {
-
-                let last_minus_one = char::from(*value-1);
-                println!("Found end symbol after {last_minus_one}");
 
                 let line = String::from_utf8_lossy(&self.buffer_ordinary[0..self.byte_counter as usize]);
                 println!("Formed line: {line}");
@@ -37,31 +38,16 @@ impl Parser {
                 if let Ok(my_sentence) = self.parser.parse_sentence(line.as_ref()){
                     println!("myLine was parsed successfully");
                 }
+                else {
+                    println!("Corrupted data");
+                }
 
-                // if let Ok(sentence) = parser.parse_sentence(line.as_ref()) {
-                //     println!("{:?}", sentence);
-                //     match sentence {
-                //         ParsedMessage::Gll(gll) => {
-                //             println!("Navigation: {:?}", gll);
-                //         }
-                //         ParsedMessage::Rmc(rmc) => {
-                //             if let Some(lon) = rmc.longitude {
-                //                 if let Some(lat) = rmc.latitude {
-                //                     println!("RMC pos: {} {}", lon, lat);
-                //                 }
-                //             }
-                //             let timezone = finder.get_tz_name(rmc.longitude.unwrap(), rmc.latitude.unwrap());
-                //             println!("Time:    {}", timezone);
-                //             if let Some(timestamp) = rmc.timestamp {
-                //             }
-                //         },
-                //         _ => {}
-                //     }
-                // }
+                //println!("Exiting program");
                 return;
             }
             self.buffer_ordinary[self.byte_counter as usize] = *value;
             self.byte_counter += 1;
+            //println!("Adding chars");
         }
     }
 }
@@ -73,6 +59,7 @@ fn main() {
         parser: NmeaParser::new(),
         finder: DefaultFinder::new(),
         connected: false,
+        can_iterate: true,
         buffer_ordinary: [0u8; 512],
     };
 
@@ -87,23 +74,6 @@ fn main() {
     let mut h = 0;
     let mut m = 0;
     let mut s = 0;
-
-    //Високосные года!!
-
-    // for (i, b) in buffer.iter().enumerate() {
-    //     match i {
-    //         0 => h = 10 * (*b - b'0'), //ASCII TO NUMBER HACK
-    //         1 => h += (*b - b'0'),
-    //         2 => m = 10 * (*b - b'0'),
-    //         3 => m += (*b - b'0'), //..
-    //         4 => s += 10 * (*b - b'0'),
-    //         5 => s += (*b - b'0'),
-    //         _ => {}
-    //     }
-    // }
-
-    //USART по пину (TX, RX на картинке)
-    //https://github.com/stm32-rs/stm32f4xx-hal/blob/master/examples/rtic-usart-shell.rs
 
     loop {
         parser_struct.byte_counter = 0;
@@ -121,3 +91,40 @@ fn main() {
     }
 }
 
+// if let Ok(sentence) = parser.parse_sentence(line.as_ref()) {
+//     println!("{:?}", sentence);
+//     match sentence {
+//         ParsedMessage::Gll(gll) => {
+//             println!("Navigation: {:?}", gll);
+//         }
+//         ParsedMessage::Rmc(rmc) => {
+//             if let Some(lon) = rmc.longitude {
+//                 if let Some(lat) = rmc.latitude {
+//                     println!("RMC pos: {} {}", lon, lat);
+//                 }
+//             }
+//             let timezone = finder.get_tz_name(rmc.longitude.unwrap(), rmc.latitude.unwrap());
+//             println!("Time:    {}", timezone);
+//             if let Some(timestamp) = rmc.timestamp {
+//             }
+//         },
+//         _ => {}
+//     }
+// }
+
+//Високосные года!!
+
+// for (i, b) in buffer.iter().enumerate() {
+//     match i {
+//         0 => h = 10 * (*b - b'0'), //ASCII TO NUMBER HACK
+//         1 => h += (*b - b'0'),
+//         2 => m = 10 * (*b - b'0'),
+//         3 => m += (*b - b'0'), //..
+//         4 => s += 10 * (*b - b'0'),
+//         5 => s += (*b - b'0'),
+//         _ => {}
+//     }
+// }
+
+//USART по пину (TX, RX на картинке)
+//https://github.com/stm32-rs/stm32f4xx-hal/blob/master/examples/rtic-usart-shell.rs
