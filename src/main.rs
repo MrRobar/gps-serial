@@ -1,6 +1,7 @@
 use std::io::{Read, Write};
 use std::str::FromStr;
 use std::time::Duration;
+use std::thread::sleep;
 use icu_timezone::{CustomTimeZone, MetazoneCalculator, MetazoneId, TimeZoneBcp47Id};
 use nmea_parser::{NmeaParser, ParsedMessage};
 use serialport::{SerialPort, SerialPortInfo};
@@ -21,33 +22,53 @@ impl Parser {
         let slice = &self.serial_buf[..t];
         for value in slice.iter(){
             let symbol = char::from(*value);
-            //println!("{}", symbol);
 
             if *value == b'\r'
             {
-                //println!("Found r symbol, continuing execution");
                 continue;
             }
             if *value == b'\n' {
 
                 let line = String::from_utf8_lossy(&self.buffer_ordinary[0..self.byte_counter as usize]);
-                println!("Formed line: {line}");
+                println!("Formed line: {} \n", line);
 
                 self.byte_counter = 0;
 
-                if let Ok(my_sentence) = self.parser.parse_sentence(line.as_ref()){
-                    println!("myLine was parsed successfully");
+                match self.parser.parse_sentence(&line) {
+                    Ok(sentence) => {
+                        println!("Parsing line...");
+                        self.retrieve_data_from_sentence(sentence);
+                        return;
+                    },
+                    Err(error) => {
+                        //println!("error parsing sentence: {:?}", error);
+                    }
                 }
-                else {
-                    println!("Corrupted data");
-                }
-
-                //println!("Exiting program");
-                return;
             }
             self.buffer_ordinary[self.byte_counter as usize] = *value;
             self.byte_counter += 1;
-            //println!("Adding chars");
+        }
+    }
+
+    fn retrieve_data_from_sentence(&mut self, sentence: ParsedMessage){
+        //println!("{:?}", sentence);
+        match sentence {
+            ParsedMessage::Gll(gll) => {
+                println!("Navigation: {:?}", gll);
+            }
+            ParsedMessage::Rmc(rmc) => {
+                if let Some(lon) = rmc.longitude {
+                    if let Some(lat) = rmc.latitude {
+                        println!("RMC pos: {} {}", lon, lat);
+                    }
+                }
+                let timezone = self.finder.get_tz_name(rmc.longitude.unwrap(), rmc.latitude.unwrap());
+                println!("Time: {}", timezone);
+                if let Some(timestamp) = rmc.timestamp {
+                    println!("{:?} \n", timestamp);
+                }
+            },
+            _ => {}
         }
     }
 }
@@ -75,11 +96,14 @@ fn main() {
     let mut m = 0;
     let mut s = 0;
 
+    let delay = Duration::from_secs(1);
+
     loop {
         parser_struct.byte_counter = 0;
         match port.read(parser_struct.serial_buf.as_mut_slice()) {
             Ok(t) => {
                 parser_struct.form_sentence(t);
+                sleep(delay)
                 // std::io::stdout().write_all(&serial_buf[..t]).unwrap()
             },
 
@@ -90,27 +114,6 @@ fn main() {
         }
     }
 }
-
-// if let Ok(sentence) = parser.parse_sentence(line.as_ref()) {
-//     println!("{:?}", sentence);
-//     match sentence {
-//         ParsedMessage::Gll(gll) => {
-//             println!("Navigation: {:?}", gll);
-//         }
-//         ParsedMessage::Rmc(rmc) => {
-//             if let Some(lon) = rmc.longitude {
-//                 if let Some(lat) = rmc.latitude {
-//                     println!("RMC pos: {} {}", lon, lat);
-//                 }
-//             }
-//             let timezone = finder.get_tz_name(rmc.longitude.unwrap(), rmc.latitude.unwrap());
-//             println!("Time:    {}", timezone);
-//             if let Some(timestamp) = rmc.timestamp {
-//             }
-//         },
-//         _ => {}
-//     }
-// }
 
 //Високосные года!!
 
