@@ -4,6 +4,7 @@ use std::time::Duration;
 use std::thread::sleep;
 use icu_timezone::{CustomTimeZone, MetazoneCalculator, MetazoneId, TimeZoneBcp47Id};
 use nmea_parser::{NmeaParser, ParsedMessage};
+use nmea_parser::chrono::format::parse;
 use serialport::{SerialPort, SerialPortInfo};
 use tzf_rs::{DefaultFinder, deg2num};
 
@@ -23,25 +24,22 @@ impl Parser {
         for value in slice.iter(){
             let symbol = char::from(*value);
 
-            if *value == b'\r'
+            if *value == b'\r' // чекнуть вот тут. CR character
             {
                 continue;
             }
-            if *value == b'\n' {
+            if *value == b'\n' { // чекнуть вот тут. LF character
 
                 let line = String::from_utf8_lossy(&self.buffer_ordinary[0..self.byte_counter as usize]);
-                println!("Formed line: {} \n", line);
-
-                self.byte_counter = 0;
+                println!("Formed line {}", line);
+                self.byte_counter = 0; // нужная херня, без неё не обнуляется просто счетчик вообще.
 
                 match self.parser.parse_sentence(&line) {
                     Ok(sentence) => {
-                        println!("Parsing line...");
                         self.retrieve_data_from_sentence(sentence);
                         return;
                     },
                     Err(error) => {
-                        //println!("error parsing sentence: {:?}", error);
                     }
                 }
             }
@@ -51,7 +49,6 @@ impl Parser {
     }
 
     fn retrieve_data_from_sentence(&mut self, sentence: ParsedMessage){
-        //println!("{:?}", sentence);
         match sentence {
             ParsedMessage::Gll(gll) => {
                 println!("Navigation: {:?}", gll);
@@ -60,12 +57,12 @@ impl Parser {
                 if let Some(lon) = rmc.longitude {
                     if let Some(lat) = rmc.latitude {
                         println!("RMC pos: {} {}", lon, lat);
+                        let timezone = self.finder.get_tz_name(rmc.longitude.unwrap(), rmc.latitude.unwrap());
+                        println!("Time: {}", timezone);
+                        if let Some(timestamp) = rmc.timestamp {
+                            println!("{:?} \n", timestamp);
+                        }
                     }
-                }
-                let timezone = self.finder.get_tz_name(rmc.longitude.unwrap(), rmc.latitude.unwrap());
-                println!("Time: {}", timezone);
-                if let Some(timestamp) = rmc.timestamp {
-                    println!("{:?} \n", timestamp);
                 }
             },
             _ => {}
@@ -98,8 +95,9 @@ fn main() {
 
     let delay = Duration::from_secs(1);
 
+
     loop {
-        parser_struct.byte_counter = 0;
+        parser_struct.byte_counter = 0; // нужная херня, без неё не отлавливаются корректные сообщения в принципе
         match port.read(parser_struct.serial_buf.as_mut_slice()) {
             Ok(t) => {
                 parser_struct.form_sentence(t);
