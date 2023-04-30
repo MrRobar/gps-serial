@@ -22,25 +22,8 @@ impl  Parser {
                     self.position_index = 0;
                     let line = core::str::from_utf8(&self.buffer[0..end as usize]).unwrap();
                     if line.starts_with('$') {
-                        // println!("Line:    {:?}", line);
-                        if let Ok(sentence) = self.parser.parse_sentence(line) {
-                            //println!("Line:    {:?}", sentence);
-                            match sentence {
-                                ParsedMessage::Rmc(rmc) => {
-                                    if let Some(lon) = rmc.longitude {
-                                        if let Some(lat) = rmc.latitude {
-                                            println!("RMC pos: {} {}", lon, lat);
-                                            let timezone = self.finder.get_tz_name(rmc.longitude.unwrap(), rmc.latitude.unwrap());
-                                            println!("Time: {}", timezone);
-                                            if let Some(timestamp) = rmc.timestamp {
-                                                println!("{:?} \n", timestamp);
-                                            }
-                                        }
-                                    }
-                                },
-                                _ => {}
-                            }
-                        }
+                        //println!("Line:    {:?}", line);
+                        self.parse_line(line);
                     } else {
                         eprintln!("Broken:  {:?}", line);
                     }
@@ -48,6 +31,26 @@ impl  Parser {
                     self.buffer[self.position_index as usize] = *b;
                     self.position_index += 1;
                 }
+            }
+        }
+    }
+    fn parse_line(&self, line: &str){
+        if let Ok(sentence) = self.parser.parse_sentence(line) {
+            //println!("Line:    {:?}", sentence);
+            match sentence {
+                ParsedMessage::Rmc(rmc) => {
+                    if let Some(lon) = rmc.longitude {
+                        if let Some(lat) = rmc.latitude {
+                            println!("RMC pos: {} {}", lon, lat);
+                            let timezone = self.finder.get_tz_name(rmc.longitude.unwrap(), rmc.latitude.unwrap());
+                            println!("Time: {}", timezone);
+                            if let Some(timestamp) = rmc.timestamp {
+                                println!("{:?} \n", timestamp);
+                            }
+                        }
+                    }
+                },
+                _ => {}
             }
         }
     }
