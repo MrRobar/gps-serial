@@ -1,3 +1,16 @@
+#![no_std]
+#![no_main]
+
+use defmt_rtt as _;
+use panic_probe as _;
+
+use cortex_m::singleton;
+use cortex_m_rt::entry;
+
+use stm32f4xx_hal::{pac, prelude::*};
+use stm32f4xx_hal::adc::{Adc, SampleTime};
+use stm32f4xx_hal::serial::{Config, Serial};
+
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::time::Duration;
@@ -99,7 +112,7 @@ fn main() {
     loop {
         match port.read(serial_buf.as_mut_slice()) {
             Ok(t) => {
-                let slice = &serial_buf[..t];
+                //let slice = &serial_buf[..t];
                 //parser_struct.form_sentence(slice);
             },
             Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => (),
