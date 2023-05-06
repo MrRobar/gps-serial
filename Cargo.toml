@@ -6,19 +6,19 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cortex-m = "0.7.7"
+cortex-m = {version = "0.7.7", features = ["critical-section-single-core"]}
 cortex-m-rt = "0.7.3"
-serialport = "*"
-nmea-parser = "0.10.0"
-tzf-rs = "0.3.0"
-icu_timezone = "1.1.0"
-dtg = "5.0.0"
-chrono-tz = "0.8.1"
-probe-run = "0.3.8"
+#serialport = "*"
+#nmea-parser = "0.10.0"
+#tzf-rs = "0.3.0"
+#icu_timezone = "1.1.0"
+#dtg = "5.0.0"
+#chrono-tz = "0.8.1"
+#probe-run = "0.3.8"
 defmt = "0.3.4"
 defmt-rtt = "0.4.0"
 panic-probe = "0.3.1"
-stm32f4xx-hal = {version = "0.15.0",features = ["stm32f411"]}
+stm32f4xx-hal = {version = "0.15.0",features = ["stm32f411", "rt"]}
 
 [patch.crates-io]
 defmt = { git = "https://github.com/knurling-rs/defmt" }
