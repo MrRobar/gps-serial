@@ -12,9 +12,6 @@ use stm32f4xx_hal as hal;
 use stm32f4xx_hal::block;
 use stm32f4xx_hal::serial::Config;
 use crate::hal::{pac, prelude::*};
-// use stm32f4xx_hal::{pac, prelude::*};
-// use stm32f4xx_hal::adc::{Adc, SampleTime};
-// use stm32f4xx_hal::serial::{Config, Serial};
 
 // use std::fs::File;
 // use std::io::{BufRead, BufReader, Read, Write};
@@ -82,9 +79,6 @@ use crate::hal::{pac, prelude::*};
 //         }
 //     }
 //
-//     fn parse_line(&mut self, line: &str){
-//
-//     }
 // }
 
 #[entry]
@@ -100,16 +94,20 @@ fn main() -> ! {
     let rx_pin = gpioa.pa10.into_alternate();
 
     //configure serial
-    let mut serial = dp.USART1.serial((tx_pin, rx_pin), Config::default().baudrate(9600.bps()).wordlength_9(), &clocks).unwrap();
+    let mut serial = dp.USART1.serial((tx_pin, rx_pin), Config::default().baudrate(9600.bps()), &clocks).unwrap();
     let (mut tx, mut rx): (stm32f4xx_hal::serial::Tx<stm32f4xx_hal::pac::USART1, u8>, stm32f4xx_hal::serial::Rx<stm32f4xx_hal::pac::USART1, u8>) = serial.split();
     let mut value: u8 = 0;
 
     loop {
         match block!(rx.read()) {
             Ok(byte) => {
+                let symbol = char::from_u32(byte as u32);
+                defmt::info!("{}", symbol);
                 // Обработка полученного байта от GPS датчика
-                // ...
-                defmt::info!("{}", byte);
+                if byte == b'\n' {
+                    defmt::info!("Found next line character");
+                }
+                //defmt::info!("{}", byte);
             }
             Err(_) => {
                 // Обработка ошибки при чтении данных
@@ -118,15 +116,6 @@ fn main() -> ! {
             }
         }
     }
-    // let ports = serialport::available_ports().expect("System error");
-    // let port = ports.first().expect("No ports available");
-    // defmt::info!("Receiving data on {} at {} baud:", &port.port_name, 9600);
-    //
-    // let mut port = serialport::new(&port.port_name, 9600)
-    //     .timeout(Duration::from_millis(10))
-    //     .open()
-    //     .expect(&format!("Unable to open serial port '{}'", port.port_name));
-    //
     // let mut serial_buf = [0u8; 1024];
     //
     // // let mut parser_struct = Parser{
@@ -135,7 +124,6 @@ fn main() -> ! {
     // //     parser: NmeaParser::new(),
     // //     finder: DefaultFinder::new(),
     // // };
-    // defmt::info!("Starting reading from port...");
     // loop {
     //     match port.read(serial_buf.as_mut_slice()) {
     //         Ok(t) => {
@@ -149,21 +137,3 @@ fn main() -> ! {
     //     }
     // }
 }
-
-// use stm32_usart::{Usart, Config};
-// use cortex_m_rt::entry;
-//
-// #[entry]
-// fn main() -> ! {
-//     let dp = stm32::Peripherals::take().unwrap();
-//     let gpioa = dp.GPIOA.split();
-//     let tx_pin = gpioa.pa2.into_alternate_af7();
-//     let rx_pin = gpioa.pa3.into_alternate_af7();
-//
-//     let config = Config::default().baudrate(115200.bps());
-//     let mut usart = Usart::new(dp.USART2, (tx_pin, rx_pin), config);
-//
-//     loop {
-//         usart.write(b'A').unwrap();
-//     }
-// }
