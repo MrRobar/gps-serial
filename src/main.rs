@@ -13,73 +13,10 @@ use stm32f4xx_hal::block;
 use stm32f4xx_hal::serial::Config;
 use crate::hal::{pac, prelude::*};
 
-// use std::fs::File;
-// use std::io::{BufRead, BufReader, Read, Write};
-// use std::time::Duration;
-// use nmea_parser::{chrono, NmeaParser, ParsedMessage};
-// use tzf_rs::{DefaultFinder, deg2num};
-// use chrono::{DateTime, Utc, Timelike};
-
-
-// impl  Parser {
-//     fn form_sentence(&mut self, slice: &[u8]){
-//         for b in slice { // На контроллере будет просто чтение по одному байту
-//             if *b != b'\n' {
-//                 if *b == b'\r' {
-//                     let end = self.position_index;
-//                     self.position_index = 0;
-//                     let line = core::str::from_utf8(&self.buffer[0..end as usize]).unwrap(); // ERROR OCCURS HERE. SOMETIMES RESULT IS NULL
-//                     if line.starts_with('$') {
-//                         //println!("Line:    {:?}", line);
-//                         if let Ok(sentence) = self.parser.parse_sentence(line) {
-//                             match sentence {
-//                                 ParsedMessage::Rmc(rmc) => {
-//                                     if let Some(lon) = rmc.longitude {
-//                                         if let Some(lat) = rmc.latitude {
-//                                             println!("RMC pos: {} {}", lon, lat);
-//                                             let timezone = self.finder.get_tz_name(rmc.longitude.unwrap(), rmc.latitude.unwrap());
-//                                             println!("Time: {}", timezone);
-//                                             self.get_time_offset(timezone);
-//                                             if let Some(timestamp) = rmc.timestamp {
-//                                                 println!("{:?} \n", timestamp);
-//                                                 let hour = timestamp.hour();
-//                                                 let minute = timestamp.minute();
-//                                                 let second = timestamp.second();
-//                                                 println!("Hours: {}. Minutes: {}. Seconds: {}", hour, minute, second);
-//                                             }
-//                                         }
-//                                     }
-//                                 },
-//                                 _ => {}
-//                             }
-//                         }
-//                     } else {
-//                         eprintln!("Broken:  {:?}", line);
-//                     }
-//                 } else {
-//                     self.buffer[self.position_index as usize] = *b;
-//                     self.position_index += 1;
-//                 }
-//             }
-//         }
-//     }
-//
-//     fn get_time_offset(self, timezone: &str){
-//         let file = File::open("timezones.txt").expect("Failed to open file");
-//         let reader = BufReader::new(file);
-//
-//         let mut i = 0;
-//         for line in reader.lines(){
-//             let record = line.expect("Failed to read line");
-//             let fields : Vec<&str> = record.split(',').collect();
-//             if fields[0] == timezone {
-//                 println!("{}", fields[1]);
-//                 break;
-//             }
-//         }
-//     }
-//
-// }
+struct Location {
+    latitude: [u8; 10],
+    longitude: [u8; 10],
+}
 
 #[entry]
 fn main() -> ! {
@@ -97,17 +34,70 @@ fn main() -> ! {
     let mut serial = dp.USART1.serial((tx_pin, rx_pin), Config::default().baudrate(9600.bps()), &clocks).unwrap();
     let (mut tx, mut rx): (stm32f4xx_hal::serial::Tx<stm32f4xx_hal::pac::USART1, u8>, stm32f4xx_hal::serial::Rx<stm32f4xx_hal::pac::USART1, u8>) = serial.split();
     let mut value: u8 = 0;
+    let mut location = Location {
+        latitude: [0; 10],
+        longitude: [0; 10],
+    }; // структура для хранения координат
+    let mut rmc_msg = [0u8; 82]; // Массив байтов для хранения RMC сообщения
+    let mut rmc_len = 0; // Длина RMC сообщения
+    let mut time_data = [0u8; 20]; // Массив байтов для хранения временных данных
+    let mut time_len = 0; // Длина временных данных
 
     loop {
         match block!(rx.read()) {
             Ok(byte) => {
-                let symbol = char::from_u32(byte as u32);
-                defmt::info!("{}", symbol);
-                // Обработка полученного байта от GPS датчика
-                if byte == b'\n' {
-                    defmt::info!("Found next line character");
+                if byte == b'$' {
+                    rmc_len = 0;
                 }
-                //defmt::info!("{}", byte);
+                let mut symbol = char::from(byte);
+                //defmt::info!("{}", symbol);
+
+                rmc_msg[rmc_len] = byte;
+                rmc_len += 1;
+
+                if rmc_len >= 6 && &rmc_msg[3..6] == b"RMC" {
+                    // Обработка RMC сообщения
+                    let mut comma_count = 0;
+                    defmt::info!("Working on message...");
+                    for i in 0..rmc_len {
+
+                        if rmc_msg[i] == b',' {
+                            comma_count += 1;
+                            if comma_count == 1 {
+                                // Начало нужной информации
+                                time_len = 0;
+                            } else if comma_count == 2 {
+                                // Конец нужной информации
+                                break;
+                            }
+                        } else if comma_count == 1 {
+                            // Записываем информацию в массив
+                            time_data[time_len] = rmc_msg[i];
+                            time_len += 1;
+                        }
+                    }
+                    //обработка временных данных
+                    // let mut hour = [0u8; 2];
+                    // hour[0] = time_data[0] / 10 + b'0';
+                    // hour[1] = time_data[0] % 10 + b'0';
+                    //
+                    // let mut minute = [0u8; 2];
+                    // minute[0] = time_data[1] / 10 + b'0';
+                    // minute[1] = time_data[1] % 10 + b'0';
+                    //
+                    // let mut second = [0u8; 2];
+                    // second[0] = time_data[2] / 10 + b'0';
+                    // second[1] = time_data[2] % 10 + b'0';
+                    // let mut h = char::from(hour[0]);
+                    // let mut h1 = char::from(hour[1]);
+                    // let mut m = char::from(hour[0]);
+                    // let mut m1 = char::from(hour[1]);
+                    // let mut s = char::from(hour[0]);
+                    // let mut s1 = char::from(hour[1]);
+                    //defmt::info!("Time: {}{}:{}{}:{}{}", h, h1, m, m1, s, s1);
+                    //panic!("Took results, finishing program");
+
+                }
             }
             Err(_) => {
                 // Обработка ошибки при чтении данных
@@ -116,24 +106,4 @@ fn main() -> ! {
             }
         }
     }
-    // let mut serial_buf = [0u8; 1024];
-    //
-    // // let mut parser_struct = Parser{
-    // //     position_index: 0,
-    // //     buffer: [0u8; 1024],
-    // //     parser: NmeaParser::new(),
-    // //     finder: DefaultFinder::new(),
-    // // };
-    // loop {
-    //     match port.read(serial_buf.as_mut_slice()) {
-    //         Ok(t) => {
-    //             //let slice = &serial_buf[..t];
-    //             //parser_struct.form_sentence(slice);
-    //         },
-    //         Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => (),
-    //         other => {
-    //             other.unwrap();
-    //         },
-    //     }
-    // }
 }
