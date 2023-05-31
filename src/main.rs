@@ -7,6 +7,7 @@ use panic_probe as _;
 
 use cortex_m::singleton;
 use cortex_m_rt::entry;
+use defmt::export::char;
 
 use stm32f4xx_hal as hal;
 use stm32f4xx_hal::block;
@@ -40,8 +41,9 @@ fn main() -> ! {
     }; // структура для хранения координат
     let mut rmc_msg = [0u8; 82]; // Массив байтов для хранения RMC сообщения
     let mut rmc_len = 0; // Длина RMC сообщения
-    let mut time_data = [0u8; 20]; // Массив байтов для хранения временных данных
-    let mut time_len = 0; // Длина временных данных
+    let mut time_data: [u8; 9] = [b'0'; 9];
+    let mut index = 0;
+    let mut kaliningrad_offset = 2;
 
     loop {
         match block!(rx.read()) {
@@ -49,55 +51,54 @@ fn main() -> ! {
                 if byte == b'$' {
                     rmc_len = 0;
                 }
-                let mut symbol = char::from(byte);
-                //defmt::info!("{}", symbol);
+                if byte == b'\n'{
+                    if &rmc_msg[3..6] == b"RMC" {
+                        for (i, &byte) in rmc_msg.iter().enumerate() {
+                            if byte == b',' && index == 0 {
+                                index = i+1;
+                            } else if byte == b',' && index != 0 {
+                                let time_slice = &rmc_msg[index..i];
+                                for (j, &t) in time_slice.iter().enumerate() {
+                                    if j >= 6 {
+                                        break;
+                                    }
+                                    time_data[j] = t;
+                                }
+                                break;
+                            }
+                        }
+                        let h = ((time_data[0] - 48) * 10 + (time_data[1] - 48)) as u32; // первые два байта - часы
+                        let res_h = h + kaliningrad_offset;
+                        let m = ((time_data[2] - 48) * 10 + (time_data[3] - 48)) as u32; // следующие два байта - минуты
+                        let s = ((time_data[4] - 48) * 10 + (time_data[5] - 48)) as u32; // последние два байта - секунды
+                        defmt::info!("Current time: {}:{}:{}", res_h, m, s);
+                        rmc_len = 0;
+                        index = 0;
+                    }
+                }
 
                 rmc_msg[rmc_len] = byte;
                 rmc_len += 1;
 
-                if rmc_len >= 6 && &rmc_msg[3..6] == b"RMC" {
-                    // Обработка RMC сообщения
-                    let mut comma_count = 0;
-                    defmt::info!("Working on message...");
-                    for i in 0..rmc_len {
-
-                        if rmc_msg[i] == b',' {
-                            comma_count += 1;
-                            if comma_count == 1 {
-                                // Начало нужной информации
-                                time_len = 0;
-                            } else if comma_count == 2 {
-                                // Конец нужной информации
-                                break;
-                            }
-                        } else if comma_count == 1 {
-                            // Записываем информацию в массив
-                            time_data[time_len] = rmc_msg[i];
-                            time_len += 1;
-                        }
-                    }
-                    //обработка временных данных
-                    // let mut hour = [0u8; 2];
-                    // hour[0] = time_data[0] / 10 + b'0';
-                    // hour[1] = time_data[0] % 10 + b'0';
-                    //
-                    // let mut minute = [0u8; 2];
-                    // minute[0] = time_data[1] / 10 + b'0';
-                    // minute[1] = time_data[1] % 10 + b'0';
-                    //
-                    // let mut second = [0u8; 2];
-                    // second[0] = time_data[2] / 10 + b'0';
-                    // second[1] = time_data[2] % 10 + b'0';
-                    // let mut h = char::from(hour[0]);
-                    // let mut h1 = char::from(hour[1]);
-                    // let mut m = char::from(hour[0]);
-                    // let mut m1 = char::from(hour[1]);
-                    // let mut s = char::from(hour[0]);
-                    // let mut s1 = char::from(hour[1]);
-                    //defmt::info!("Time: {}{}:{}{}:{}{}", h, h1, m, m1, s, s1);
-                    //panic!("Took results, finishing program");
-
-                }
+                //     //обработка временных данных
+                //     // let mut hour = [0u8; 2];
+                //     // hour[0] = time_data[0] / 10 + b'0';
+                //     // hour[1] = time_data[0] % 10 + b'0';
+                //     //
+                //     // let mut minute = [0u8; 2];
+                //     // minute[0] = time_data[1] / 10 + b'0';
+                //     // minute[1] = time_data[1] % 10 + b'0';
+                //     //
+                //     // let mut second = [0u8; 2];
+                //     // second[0] = time_data[2] / 10 + b'0';
+                //     // second[1] = time_data[2] % 10 + b'0';
+                //     // let mut h = char::from(hour[0]);
+                //     // let mut h1 = char::from(hour[1]);
+                //     // let mut m = char::from(hour[0]);
+                //     // let mut m1 = char::from(hour[1]);
+                //     // let mut s = char::from(hour[0]);
+                //     // let mut s1 = char::from(hour[1]);
+                //     //defmt::info!("Time: {}{}:{}{}:{}{}", h, h1, m, m1, s, s1);
             }
             Err(_) => {
                 // Обработка ошибки при чтении данных
